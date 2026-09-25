@@ -66,12 +66,7 @@ export async function requireRole(roles: Role[]): Promise<CurrentUser> {
   return user;
 }
 
-/** A mund ky rol të aprovojë/refuzojë/paguajë shpenzime? */
-export function canApprove(role: Role): boolean {
-  return role === "ADMIN" || role === "FINANCE";
-}
-
-/** A mund ky rol të shohë shpenzimet e të tjerëve? */
-export function canSeeAllExpenses(role: Role): boolean {
+/** A shikon ky rol arkat dhe lëvizjet e të gjithë punonjësve? */
+export function canSeeAll(role: Role): boolean {
   return role === "ADMIN" || role === "FINANCE";
 }

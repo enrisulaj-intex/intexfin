@@ -4,7 +4,7 @@ import { deleteCategoryAction, toggleCategoryAction } from "@/actions/categories
 import { SubmitButton } from "@/components/SubmitButton";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/session";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, toNumber } from "@/lib/format";
 import { CategoryForm } from "./CategoryForm";
 
 export const metadata: Metadata = { title: "Kategori" };
@@ -21,19 +21,22 @@ export default async function CategoriesPage({
     prisma.category.findMany({
       orderBy: [{ active: "desc" }, { name: "asc" }],
       include: {
-        _count: { select: { expenses: true } },
+        _count: { select: { transactions: true } },
       },
     }),
     edit ? prisma.category.findUnique({ where: { id: edit } }) : null,
   ]);
 
-  const sums = await prisma.expense.groupBy({
+  // Totali i shpenzimeve sipas kategorisë, vetëm në Lekë.
+  const sums = await prisma.transaction.groupBy({
     by: ["categoryId"],
-    where: { status: { in: ["APPROVED", "PAID"] } },
+    where: { type: "SHPENZIM", currency: "ALL" },
     _sum: { totalAmount: true },
   });
   const sumByCategory = new Map(
-    sums.map((s) => [s.categoryId, s._sum.totalAmount]),
+    sums
+      .filter((s) => s.categoryId)
+      .map((s) => [s.categoryId as string, toNumber(s._sum.totalAmount)]),
   );
 
   return (
@@ -81,7 +84,7 @@ export default async function CategoriesPage({
                     <th>Kodi</th>
                     <th>Emri</th>
                     <th className="text-right">Zëra</th>
-                    <th className="text-right">Total aprovuar</th>
+                    <th className="text-right">Total (Lekë)</th>
                     <th>Statusi</th>
                     <th />
                   </tr>
@@ -103,7 +106,7 @@ export default async function CategoriesPage({
                         ) : null}
                       </td>
                       <td className="text-right tabular-nums">
-                        {category._count.expenses}
+                        {category._count.transactions}
                       </td>
                       <td className="whitespace-nowrap text-right tabular-nums">
                         {formatMoney(sumByCategory.get(category.id) ?? 0)}
@@ -133,7 +136,7 @@ export default async function CategoriesPage({
                               {category.active ? "Çaktivizo" : "Aktivizo"}
                             </SubmitButton>
                           </form>
-                          {user.role === "ADMIN" && category._count.expenses === 0 ? (
+                          {user.role === "ADMIN" && category._count.transactions === 0 ? (
                             <form action={deleteCategoryAction}>
                               <input type="hidden" name="id" value={category.id} />
                               <SubmitButton

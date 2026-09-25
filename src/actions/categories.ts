@@ -75,7 +75,7 @@ export async function deleteCategoryAction(formData: FormData) {
   await requireRole(["ADMIN"]);
   await requireUser();
   const id = String(formData.get("id") ?? "");
-  const count = await prisma.expense.count({ where: { categoryId: id } });
+  const count = await prisma.transaction.count({ where: { categoryId: id } });
   if (count > 0) {
     // Kategoria është në përdorim — vetëm çaktivizohet.
     await prisma.category.update({ where: { id }, data: { active: false } });

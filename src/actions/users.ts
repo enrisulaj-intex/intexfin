@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { requireRole } from "@/lib/session";
+import { ensureCashBoxes } from "@/lib/accounts";
 import { userCreateSchema, userUpdateSchema } from "@/lib/validation";
 import type { FormState } from "@/actions/auth";
 
@@ -40,6 +41,8 @@ export async function createUserAction(
         passwordHash: await hashPassword(parsed.data.password),
       },
     });
+    // Çdo punonjës i ri merr menjëherë arkat e veta: Lek, EUR, USD.
+    await ensureCashBoxes(created.id);
     await prisma.auditLog.create({
       data: {
         action: "USER_CREATED",

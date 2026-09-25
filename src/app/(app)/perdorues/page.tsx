@@ -24,7 +24,7 @@ export default async function UsersPage({
   const [users, editing] = await Promise.all([
     prisma.user.findMany({
       orderBy: [{ active: "desc" }, { name: "asc" }],
-      include: { _count: { select: { expensesCreated: true } } },
+      include: { _count: { select: { transactions: true } } },
     }),
     edit ? prisma.user.findUnique({ where: { id: edit } }) : null,
   ]);
@@ -72,7 +72,7 @@ export default async function UsersPage({
                   <th>Emri</th>
                   <th>Email</th>
                   <th>Roli</th>
-                  <th className="text-right">Shpenzime</th>
+                  <th className="text-right">Lëvizje</th>
                   <th>Krijuar</th>
                   <th>Statusi</th>
                   <th />
@@ -96,7 +96,7 @@ export default async function UsersPage({
                       </span>
                     </td>
                     <td className="text-right tabular-nums">
-                      {user._count.expensesCreated}
+                      {user._count.transactions}
                     </td>
                     <td className="whitespace-nowrap text-xs text-slate-500">
                       {formatDateTime(user.createdAt)}

@@ -17,5 +17,23 @@ services:
       timeout: 5s
       retries: 10
 
+  app:
+    build: .
+    container_name: intexfin-app
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://intexfin:intexfin@db:5432/intexfin?schema=public
+      # Vlerë vetëm për zhvillim lokal — ndryshoje në prodhim.
+      AUTH_SECRET: zhvillim-lokal-ndryshoje-ne-prodhim-min32
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - intexfin-uploads:/app/uploads
+
 volumes:
   intexfin-pgdata:
+  intexfin-uploads:

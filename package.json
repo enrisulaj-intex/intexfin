@@ -2,7 +2,7 @@
   "name": "intexfin",
   "version": "0.1.0",
   "private": true,
-  "description": "Sistemi financiar i brendshëm i Intex Courier — moduli i shpenzimeve",
+  "description": "Sistemi financiar i brendshëm i Intex Courier — arkat dhe cash-flow",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
@@ -12,7 +12,8 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "setup": "prisma generate && prisma db push && tsx prisma/seed.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { canSeeAllExpenses, getCurrentUser } from "@/lib/session";
+import { canSeeAll, getCurrentUser } from "@/lib/session";
 
 const UPLOAD_DIR = path.join(process.cwd(), "uploads");
 
@@ -18,16 +18,25 @@ export async function GET(
   const { id } = await params;
   const attachment = await prisma.attachment.findUnique({
     where: { id },
-    include: { expense: { select: { createdById: true } } },
+    include: {
+      transaction: {
+        select: {
+          createdById: true,
+          account: { select: { ownerId: true } },
+        },
+      },
+    },
   });
   if (!attachment) {
     return NextResponse.json({ error: "Dokumenti nuk u gjet" }, { status: 404 });
   }
 
-  if (
-    !canSeeAllExpenses(user.role) &&
-    attachment.expense.createdById !== user.id
-  ) {
+  const { transaction } = attachment;
+  const allowed =
+    canSeeAll(user.role) ||
+    transaction.createdById === user.id ||
+    transaction.account?.ownerId === user.id;
+  if (!allowed) {
     return NextResponse.json({ error: "Pa akses" }, { status: 403 });
   }
 
@@ -48,9 +57,6 @@ export async function GET(
       },
     });
   } catch {
-    return NextResponse.json(
-      { error: "Skedari mungon në server" },
-      { status: 404 },
-    );
+    return NextResponse.json({ error: "Skedari mungon në server" }, { status: 404 });
   }
 }

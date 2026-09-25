@@ -1,5 +1,5 @@
 // Skema e bazës së të dhënave — IntexFin
-// Moduli: Shpenzime
+// Modulet: Arkat (për punonjës, sipas monedhës) dhe lëvizjet e parasë
 
 generator client {
   provider = "prisma-client-js"
@@ -12,26 +12,39 @@ datasource db {
 
 /// Rolet e përdoruesve në sistem
 enum Role {
-  ADMIN // Akses i plotë, menaxhon përdoruesit dhe konfigurimet
-  FINANCE // Aprovon, regjistron pagesa, sheh të gjitha shpenzimet
-  STAFF // Krijon dhe dërgon për aprovim shpenzimet e veta
+  ADMIN // Akses i plotë, menaxhon përdoruesit, arkat dhe konfigurimet
+  FINANCE // Regjistron dhe shikon lëvizjet e të gjithë punonjësve
+  STAFF // Punon vetëm me arkat e veta
 }
 
-/// Statuset e një shpenzimi
-enum ExpenseStatus {
-  DRAFT // Draft — ende i pa dërguar
-  SUBMITTED // Dërguar për aprovim
-  APPROVED // Aprovuar nga financa
-  REJECTED // Refuzuar
-  PAID // Paguar
+/// Monedhat me të cilat punon kompania
+enum Currency {
+  ALL // Lekë
+  EUR
+  USD
 }
 
-/// Mënyrat e pagesës
-enum PaymentMethod {
-  CASH // Para në dorë / arkë
-  BANK // Transfertë bankare
-  CARD // Kartë
-  OTHER // Tjetër
+/// Lloji i llogarisë ku mbahet paraja
+enum AccountKind {
+  ARKE // Arka e një punonjësi — një për çdo monedhë
+  BANKE // Llogari bankare e kompanisë
+}
+
+/// Llojet e lëvizjeve të parasë
+enum TransactionType {
+  SHPENZIM // Dalje parash nga arka ose banka
+  ARKETIM // Hyrje parash — mbushja e arkës nga arkëtimet
+  DEPOZITIM // Arkë → bankë
+  E_DREJTE // E drejtë për arkëtim — nuk prek gjendjen derisa arkëtohet
+  DIFERENCE // Korrigjim i gjendjes (tepricë ose mungesë)
+  TRANSFERTE // Lëvizje midis dy llogarive të së njëjtës monedhë
+}
+
+/// Nga vjen lëvizja — përgatitje për integrimin me sistemin e Intex Courier
+enum TransactionSource {
+  MANUAL // Hedhur me dorë në IntexFin
+  INTEX // Ardhur nga sistemi i Intex Courier
+  IMPORT // Ngarkuar nga Excel/CSV
 }
 
 model User {
@@ -44,24 +57,50 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  expensesCreated  Expense[]   @relation("ExpenseCreatedBy")
-  expensesApproved Expense[]   @relation("ExpenseApprovedBy")
-  auditLogs        AuditLog[]
+  accounts     Account[]     @relation("AccountOwner")
+  transactions Transaction[] @relation("TransactionCreatedBy")
+  auditLogs    AuditLog[]
 
   @@index([role])
   @@map("users")
 }
 
+/// Arka e një punonjësi ose llogari bankare e kompanisë.
+/// Çdo punonjës ka një arkë për çdo monedhë (Lek, EUR, USD).
+model Account {
+  id             String      @id @default(cuid())
+  kind           AccountKind
+  currency       Currency
+  name           String // p.sh. "Arka në Lek" ose "BKT — Lek"
+  /// Punonjësi që e mban arkën. Bosh për llogaritë bankare të kompanisë.
+  ownerId        String?
+  owner          User?       @relation("AccountOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  /// Gjendja me të cilën hapet arka në sistem
+  openingBalance Decimal     @default(0) @db.Decimal(14, 2)
+  active         Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  transactionsOut Transaction[] @relation("TxAccount")
+  transactionsIn  Transaction[] @relation("TxToAccount")
+
+  /// Një punonjës ka vetëm një arkë për çdo monedhë
+  @@unique([ownerId, kind, currency])
+  @@index([kind])
+  @@index([ownerId])
+  @@map("accounts")
+}
+
 model Category {
   id          String   @id @default(cuid())
   code        String   @unique
-  name        String
+  name        String   @unique
   description String?
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  expenses Expense[]
+  transactions Transaction[]
 
   @@index([active])
   @@map("categories")
@@ -70,7 +109,7 @@ model Category {
 model Supplier {
   id        String   @id @default(cuid())
   name      String
-  nipt      String?  @unique // NIPT / NUIS i furnitorit
+  nipt      String?  @unique
   email     String?
   phone     String?
   address   String?
@@ -79,42 +118,60 @@ model Supplier {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  expenses Expense[]
+  transactions Transaction[]
 
   @@index([active])
   @@map("suppliers")
 }
 
-model Expense {
-  id             String        @id @default(cuid())
-  reference      String        @unique // p.sh. SHP-2026-0001
-  expenseDate    DateTime // Data e shpenzimit
-  documentNumber String? // Nr. i faturës / dokumentit
+model Transaction {
+  id             String            @id @default(cuid())
+  reference      String            @unique // SHP-2026-0001, ARK-2026-0001, …
+  type           TransactionType
+  source         TransactionSource @default(MANUAL)
+  date           DateTime
   description    String
-  amount         Decimal       @db.Decimal(12, 2) // Vlera pa TVSH
-  vatRate        Decimal       @default(0) @db.Decimal(5, 2) // % e TVSH-së
-  vatAmount      Decimal       @default(0) @db.Decimal(12, 2)
-  totalAmount    Decimal       @db.Decimal(12, 2) // amount + vatAmount
-  currency       String        @default("ALL")
-  paymentMethod  PaymentMethod @default(BANK)
-  status         ExpenseStatus @default(DRAFT)
-  notes          String?
+  documentNumber String?
+  counterparty   String? // Kush paguan ose kujt i paguhet
 
-  categoryId String
-  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  currency    Currency
+  amount      Decimal  @db.Decimal(14, 2) // Vlera pa TVSH
+  vatRate     Decimal  @default(0) @db.Decimal(5, 2)
+  vatAmount   Decimal  @default(0) @db.Decimal(14, 2)
+  totalAmount Decimal  @db.Decimal(14, 2) // Vlera që lëviz vërtet
+
+  /// Llogaria nga e cila del paraja (shpenzim, depozitim) ose ku hyn (arkëtim).
+  /// Bosh vetëm për të drejtat për arkëtim, që nuk lëvizin para.
+  accountId String?
+  account   Account? @relation("TxAccount", fields: [accountId], references: [id], onDelete: Restrict)
+  /// Destinacioni për depozitim dhe transfertë
+  toAccountId String?
+  toAccount   Account? @relation("TxToAccount", fields: [toAccountId], references: [id], onDelete: Restrict)
+
+  /// Efektet e llogaritura kur ruhet lëvizja, me shenjë.
+  /// Gjendja e një llogarie = openingBalance + SUM(këtyre) — pa logjikë të përsëritur.
+  accountEffect   Decimal @default(0) @db.Decimal(14, 2)
+  toAccountEffect Decimal @default(0) @db.Decimal(14, 2)
+
+  /// false = hyn vetëm në pasqyrën e rezultatit, nuk e ul gjendjen e arkës
+  affectsBalance Boolean @default(true)
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
   supplierId String?
   supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
 
-  createdById String
-  createdBy   User   @relation("ExpenseCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  /// Arkëtimi që mbyll një të drejtë për arkëtim
+  settlesId String?      @unique
+  settles   Transaction? @relation("Settlement", fields: [settlesId], references: [id], onDelete: SetNull)
+  settledBy Transaction? @relation("Settlement")
+  settledAt DateTime? // Mbushet te e drejta kur arkëtohet
 
-  approvedById String?
-  approvedBy   User?     @relation("ExpenseApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
-  approvedAt   DateTime?
-  rejectedAt   DateTime?
-  rejectReason String?
-  paidAt       DateTime?
+  notes String?
+
+  createdById String
+  createdBy   User   @relation("TransactionCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
 
   attachments Attachment[]
   auditLogs   AuditLog[]
@@ -122,39 +179,41 @@ model Expense {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([status])
-  @@index([expenseDate])
+  @@index([type])
+  @@index([date])
+  @@index([accountId])
+  @@index([toAccountId])
   @@index([categoryId])
-  @@index([supplierId])
   @@index([createdById])
-  @@map("expenses")
+  @@index([settledAt])
+  @@map("transactions")
 }
 
 model Attachment {
-  id           String   @id @default(cuid())
-  expenseId    String
-  expense      Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
-  fileName     String // Emri i ruajtur në disk
-  originalName String
-  mimeType     String
-  size         Int
-  createdAt    DateTime @default(now())
+  id            String      @id @default(cuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  fileName      String
+  originalName  String
+  mimeType      String
+  size          Int
+  createdAt     DateTime    @default(now())
 
-  @@index([expenseId])
+  @@index([transactionId])
   @@map("attachments")
 }
 
 model AuditLog {
-  id        String   @id @default(cuid())
-  action    String // p.sh. EXPENSE_CREATED, EXPENSE_APPROVED
-  details   String?
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  expenseId String?
-  expense   Expense? @relation(fields: [expenseId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  id            String       @id @default(cuid())
+  action        String
+  details       String?
+  userId        String?
+  user          User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  createdAt     DateTime     @default(now())
 
-  @@index([expenseId])
+  @@index([transactionId])
   @@index([userId])
   @@map("audit_logs")
 }

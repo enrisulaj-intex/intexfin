@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type Currency } from "@prisma/client";
 
 type Numberish = number | string | Prisma.Decimal | null | undefined;
 
@@ -10,21 +10,12 @@ type Numberish = number | string | Prisma.Decimal | null | undefined;
 const NUMBER_LOCALE = "de-DE";
 const DATE_LOCALE = "sq-AL";
 
+const SYMBOLS: Record<string, string> = { ALL: "L", EUR: "€", USD: "$" };
+
 export function toNumber(value: Numberish): number {
   if (value === null || value === undefined) return 0;
   if (typeof value === "number") return value;
   return Number(value.toString());
-}
-
-/** Formatim monetar shqip: 1.250,00 Lekë */
-export function formatMoney(value: Numberish, currency = "ALL"): string {
-  const n = toNumber(value);
-  const formatted = new Intl.NumberFormat(NUMBER_LOCALE, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(n);
-  const suffix = currency === "ALL" ? "Lekë" : currency;
-  return `${formatted} ${suffix}`;
 }
 
 export function formatNumber(value: Numberish): string {
@@ -32,6 +23,18 @@ export function formatNumber(value: Numberish): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(toNumber(value));
+}
+
+/** Formatim monetar: 1.250,00 L — 1.250,00 € — 1.250,00 $ */
+export function formatMoney(value: Numberish, currency: Currency | string = "ALL"): string {
+  return `${formatNumber(value)} ${SYMBOLS[currency] ?? currency}`;
+}
+
+/** Si formatMoney, por me shenjën + para vlerave pozitive. Zeroja mbetet pa shenjë. */
+export function formatSigned(value: Numberish, currency: Currency | string = "ALL"): string {
+  const n = toNumber(value);
+  if (n === 0) return formatMoney(0, currency);
+  return `${n > 0 ? "+" : ""}${formatMoney(n, currency)}`;
 }
 
 export function formatDate(date: Date | string | null | undefined): string {
@@ -56,38 +59,34 @@ export function formatDateTime(date: Date | string | null | undefined): string {
   }).format(d);
 }
 
-/** Formati për input[type=date] */
+export function formatMonth(date: Date): string {
+  return new Intl.DateTimeFormat(DATE_LOCALE, {
+    month: "long",
+    year: "numeric",
+  }).format(date);
+}
+
+/** Formati për input[type=date] — në orën lokale, jo UTC. */
 export function toDateInputValue(date: Date | string | null | undefined): string {
   if (!date) return "";
   const d = typeof date === "string" ? new Date(date) : date;
-  return d.toISOString().slice(0, 10);
+  const offset = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - offset).toISOString().slice(0, 10);
 }
-
-export const STATUS_LABELS: Record<string, string> = {
-  DRAFT: "Draft",
-  SUBMITTED: "Për aprovim",
-  APPROVED: "Aprovuar",
-  REJECTED: "Refuzuar",
-  PAID: "Paguar",
-};
-
-export const STATUS_STYLES: Record<string, string> = {
-  DRAFT: "bg-slate-100 text-slate-700 ring-slate-200",
-  SUBMITTED: "bg-amber-50 text-amber-800 ring-amber-200",
-  APPROVED: "bg-sky-50 text-sky-800 ring-sky-200",
-  REJECTED: "bg-rose-50 text-rose-800 ring-rose-200",
-  PAID: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-};
-
-export const PAYMENT_LABELS: Record<string, string> = {
-  CASH: "Arkë / Cash",
-  BANK: "Bankë",
-  CARD: "Kartë",
-  OTHER: "Tjetër",
-};
 
 export const ROLE_LABELS: Record<string, string> = {
   ADMIN: "Administrator",
   FINANCE: "Financë",
   STAFF: "Staf",
 };
+
+export const SOURCE_LABELS: Record<string, string> = {
+  MANUAL: "Hedhur me dorë",
+  INTEX: "Intex Courier",
+  IMPORT: "Ngarkim Excel",
+};
+
+export const MONTHS_SQ = [
+  "Janar", "Shkurt", "Mars", "Prill", "Maj", "Qershor",
+  "Korrik", "Gusht", "Shtator", "Tetor", "Nëntor", "Dhjetor",
+];

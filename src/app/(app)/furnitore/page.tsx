@@ -4,7 +4,7 @@ import { toggleSupplierAction } from "@/actions/suppliers";
 import { SubmitButton } from "@/components/SubmitButton";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/session";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, toNumber } from "@/lib/format";
 import { SupplierForm } from "./SupplierForm";
 
 export const metadata: Metadata = { title: "Furnitorë" };
@@ -20,12 +20,13 @@ export default async function SuppliersPage({
   const [suppliers, editing, sums] = await Promise.all([
     prisma.supplier.findMany({
       orderBy: [{ active: "desc" }, { name: "asc" }],
-      include: { _count: { select: { expenses: true } } },
+      include: { _count: { select: { transactions: true } } },
     }),
     edit ? prisma.supplier.findUnique({ where: { id: edit } }) : null,
-    prisma.expense.groupBy({
+    // Totali i blerjeve nga çdo furnitor, vetëm në Lekë.
+    prisma.transaction.groupBy({
       by: ["supplierId"],
-      where: { status: { in: ["APPROVED", "PAID"] } },
+      where: { type: "SHPENZIM", currency: "ALL" },
       _sum: { totalAmount: true },
     }),
   ]);
@@ -33,7 +34,7 @@ export default async function SuppliersPage({
   const sumBySupplier = new Map(
     sums
       .filter((s) => s.supplierId)
-      .map((s) => [s.supplierId as string, s._sum.totalAmount]),
+      .map((s) => [s.supplierId as string, toNumber(s._sum.totalAmount)]),
   );
 
   return (
@@ -84,8 +85,8 @@ export default async function SuppliersPage({
                     <th>Emri</th>
                     <th>NIPT</th>
                     <th>Kontakt</th>
-                    <th className="text-right">Zëra</th>
-                    <th className="text-right">Total aprovuar</th>
+                    <th className="text-right">Lëvizje</th>
+                    <th className="text-right">Total (Lekë)</th>
                     <th>Statusi</th>
                     <th />
                   </tr>
@@ -107,7 +108,7 @@ export default async function SuppliersPage({
                         {!supplier.email && !supplier.phone ? "—" : null}
                       </td>
                       <td className="text-right tabular-nums">
-                        {supplier._count.expenses}
+                        {supplier._count.transactions}
                       </td>
                       <td className="whitespace-nowrap text-right tabular-nums">
                         {formatMoney(sumBySupplier.get(supplier.id) ?? 0)}
