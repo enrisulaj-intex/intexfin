@@ -6,7 +6,7 @@ dhe të gjitha lëvizjet e parasë regjistrohen mbi to.
 
 ## Si ta shohësh te kompjuteri yt
 
-### Mënyra 1 — me Docker (një komandë)
+### Me Docker — një komandë
 
 ```bash
 git clone https://github.com/enrisulaj-intex/intexfin.git
@@ -18,7 +18,7 @@ docker compose up --build
 Hape **http://localhost:3000** dhe hyr me `admin@intexcourier.al` / `Intex2026!`.
 Baza krijohet dhe mbushet vetë herën e parë.
 
-### Mënyra 2 — pa Docker
+### Pa Docker
 
 Duhet Node.js 20+ dhe një PostgreSQL lokal.
 
@@ -61,14 +61,35 @@ dalë në një kohë tjetër.
 
 ## Hedhja e lëvizjeve
 
-**Mënyra 1 — paneli i shpejtë** (e ndërtuar): te faqja kryesore, në krahun e
-djathtë. Zgjedh llojin, monedhën, shkruan shumën dhe e shton. Paneli tregon
-gjendjen e arkës përkatëse ndërsa shkruan, dhe kategoria krijohet vetë nëse nuk
-ekziston.
+**Mënyra 1 — paneli i shpejtë**: te faqja kryesore, në krahun e djathtë.
+Zgjedh llojin, monedhën, shkruan shumën dhe e shton. Paneli tregon gjendjen e
+arkës përkatëse ndërsa shkruan, dhe kategoria krijohet vetë nëse nuk ekziston.
 
-**Mënyra 2 — faqja me tab-e për ngarkim**: ende e pandërtuar. Modeli i të
-dhënave e mbështet tashmë (fusha `source` ndan hedhjen me dorë nga ngarkimi dhe
-nga integrimi me Intex Courier), ndaj do të shtohet vetëm ndërfaqja.
+**Mënyra 2 — faqja `Ngarkim`**: një tab për çdo lloj, me dy rrugë secili.
+
+*Hedhje manuale* — formulari i plotë: TVSH, nr. dokumenti, pala, shënime dhe
+dokumente të bashkëngjitura.
+
+*Ngarkim nga Excel* — ngarko `.xlsx` ose `.csv`:
+
+1. Skedari lexohet dhe shfaqet rresht për rresht. **Asgjë nuk shkruhet** derisa
+   ta konfirmosh.
+2. Çdo rresht kontrollohet: data, monedha, shuma, punonjësi, llogaria. Rreshtat
+   me gabime shënohen me kuq dhe nuk ngarkohen.
+3. Rreshtat që përputhen me një lëvizje ekzistuese (e njëjta datë, shumë,
+   monedhë dhe përshkrim) shënohen si **dyfishim i mundshëm** — paralajmërim,
+   jo bllokim.
+4. Konfirmimi shkruan të gjitha në një transaksion të vetëm: ose kalojnë të
+   gjitha, ose asnjë.
+
+Kolonat njihen nga emri, pa dallim shkronjash të mëdha apo theksash — `Përshkrimi`,
+`pershkrimi` dhe `PERSHKRIMI` lexohen njësoj. Çdo tab ka **shabllonin e vet për
+shkarkim**, me kolonat e sakta dhe një rresht shembull.
+
+Formatet e pranuara: data si `25.09.2026`, `2026-09-25` ose datë Excel; shuma si
+`14500,00`, `14500.00` ose `14.500,00`; monedha si `Lek`, `Lekë`, `ALL`, `EUR`,
+`USD`, `€`, `$`. Punonjësi njihet nga emri ose email-i; bosh do të thotë vetja.
+Kufiri është 2000 rreshta për ngarkim.
 
 ## Rolet
 
@@ -121,14 +142,16 @@ src/
   app/
     (app)/
       dashboard/       Arka & Cash-Flow + paneli i shpejtë
+      ngarkim/         Tab-et me formularin e plotë dhe ngarkimin nga Excel
       arka/            Arkat e punonjësve dhe llogaritë bankare
       levizjet/        Lista, filtrat dhe detajet e lëvizjeve
       kategori/ furnitore/ perdorues/
     api/
       dokumente/[id]/  Shkarkimi i dokumenteve, me kontroll aksesi
       levizjet/eksport CSV për Excel
+      ngarkim/shabllon Shabllonet CSV për çdo lloj lëvizjeje
   components/          QuickEntry dhe komponentë të përbashkët
-  lib/                 db, auth, session, llogaritë, efektet, filtrat, formatimi
+  lib/                 db, auth, session, llogaritë, efektet, leximi i skedarëve, formatimi
   middleware.ts        Mbrojtja e rrugëve
 uploads/               Dokumentet e bashkëngjitura (jashtë git-it)
 ```
@@ -150,7 +173,6 @@ uploads/               Dokumentet e bashkëngjitura (jashtë git-it)
 
 ## Hapat e ardhshëm
 
-- Mënyra 2: faqja me tab-e (Shpenzime, Diferenca, E drejtë, Arkëtim, Depozitim, Transfertë)
 - Integrimi me sistemin e Intex Courier për mbushjen automatike të arkave
 - Këmbimi valutor midis arkave
 - Raporte të zgjeruara dhe mbyllje periudhe

@@ -12,6 +12,7 @@ export default async function AppLayout({
   const items: NavItem[] = [
     { href: "/dashboard", label: "Paneli", icon: "◧" },
     { href: "/arka", label: "Arkat", icon: "▣" },
+    { href: "/ngarkim", label: "Ngarkim", icon: "↥" },
     { href: "/levizjet", label: "Lëvizjet", icon: "▤" },
   ];
   if (user.role === "ADMIN" || user.role === "FINANCE") {

@@ -4,6 +4,7 @@ import type { Currency } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { canSeeAll, requireUser } from "@/lib/session";
 import { getBalances } from "@/lib/accounts";
+import { getEntryFormData } from "@/lib/entry-data";
 import {
   monthRange,
   parsePeriod,
@@ -141,29 +142,9 @@ export default async function DashboardPage({
     ...byCategory.map((r) => toNumber(r._sum.totalAmount)),
   );
 
-  // Të dhënat për panelin e shpejtë
-  const [owners, allCashBoxes, bankRows, categoryNames, suppliers] =
-    await Promise.all([
-      seeAll
-        ? prisma.user.findMany({
-            where: { active: true },
-            orderBy: { name: "asc" },
-            select: { id: true, name: true },
-          })
-        : Promise.resolve([{ id: user.id, name: user.name }]),
-      getBalances({ kind: "ARKE", ...(seeAll ? {} : { ownerId: user.id }) }),
-      getBalances({ kind: "BANKE", active: true }),
-      prisma.category.findMany({
-        where: { active: true },
-        orderBy: { name: "asc" },
-        select: { name: true },
-      }),
-      prisma.supplier.findMany({
-        where: { active: true },
-        orderBy: { name: "asc" },
-        select: { id: true, name: true },
-      }),
-    ]);
+  // Të dhënat e panelit të shpejtë ndahen me formularin e plotë te /ngarkim.
+  const entryData = await getEntryFormData(user);
+  const bankRows = seeAll ? await getBalances({ kind: "BANKE", active: true }) : [];
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i);
 
@@ -405,31 +386,7 @@ export default async function DashboardPage({
             <QuickEntry
               today={toDateInputValue(new Date())}
               currentUserId={user.id}
-              owners={owners}
-              cashBoxes={allCashBoxes.map((row) => ({
-                id: row.account.id,
-                ownerId: row.account.ownerId as string,
-                ownerName: row.account.owner?.name ?? "—",
-                currency: row.account.currency,
-                balance: row.balance,
-              }))}
-              bankAccounts={bankRows.map((row) => ({
-                id: row.account.id,
-                name: row.account.name,
-                currency: row.account.currency,
-                // Stafi duhet ta zgjedhë llogarinë për depozitim, por
-                // gjendja e bankës nuk i tregohet.
-                balance: seeAll ? row.balance : null,
-              }))}
-              categories={categoryNames.map((c) => c.name)}
-              suppliers={suppliers}
-              receivables={receivables.map((r) => ({
-                id: r.id,
-                reference: r.reference,
-                description: r.description,
-                currency: r.currency,
-                total: toNumber(r.totalAmount),
-              }))}
+              {...entryData}
             />
           </section>
         </aside>
